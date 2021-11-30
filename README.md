@@ -1,2 +1,2 @@
 # Efficient-Error-Correcting-Codes-for-Sliding-Windows
-yamit and matan
+Yamit and Matan

@@ -40,7 +40,7 @@ def sender(block_num, data, size_of_block, blocks, r, block_count):
                 blocks.append([])
                 # update block counter
                 block_count.pop(0)
-                blocks.append(-1)
+                block_count.append(-1)
                 break
         else:
             blocks[0][bit_index] = '-'

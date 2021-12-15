@@ -61,6 +61,9 @@ if __name__ == '__main__':
     p = float(input("please enter the noise level"))     # noise level p < 1
     epsilon = 0.0001    # epsilon > 0
     s = math.floor(pow(math.log2(N), 2))    # The sender maintains blocks of elements of size s from the current window
+    # s|n without remainder
+    while not (N % s == 0):
+        s += 1
     R = 3   # At each time step R symbols are communicated over the channel
     k = math.floor(N/s) + 1    # number of blocks
     data_stream = []

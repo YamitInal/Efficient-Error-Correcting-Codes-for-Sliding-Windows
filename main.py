@@ -14,20 +14,35 @@ def init_sender(block_num, data, size_of_block, blocks):
         blocks.append(list(block))
 
 
-def send_symbol(symbol):
-    print(f"the symbol {symbol} was send to receiver")
+def init_receiver(num_of_blocks, blocks, the_decoded_blocks):
+    # create the blocks -  partition of the stream into blocks
+    for i in range(num_of_blocks):
+        blocks.append([])
+    for i in range(num_of_blocks):
+        the_decoded_blocks.append('')
+
+
+def send_symbol(symbol, blocks, current_block):
+    blocks[current_block].append(symbol)
 
 
 def ecc(symbol):
     return symbol
 
 
+def ecc_minus_1(string):
+    return string
+
+
 def bc(symbol):
     return symbol
 
 
-def sender(block_num, data, size_of_block, blocks, r, block_count):
-    print("the new data is " + str(data))
+def bc_minus_1(string):
+    return string
+
+
+def sender(block_num, data, size_of_block, blocks, r, block_count, receiver_blocks, random_blocks, the_decoded_blocks):
     # any arriving element is appended to the last non-empty block
     blocks[block_num-1].append(data)
     bit_index = 0
@@ -38,6 +53,10 @@ def sender(block_num, data, size_of_block, blocks, r, block_count):
             if bit_index == size_of_block-1:    # need to delete block and add a new one
                 blocks.pop(0)
                 blocks.append([])
+                receiver_blocks.pop(0)
+                receiver_blocks.append([])
+                the_decoded_blocks.pop(0)
+                the_decoded_blocks.append('')
                 # update block counter
                 block_count.pop(0)
                 block_count.append(-1)
@@ -48,11 +67,25 @@ def sender(block_num, data, size_of_block, blocks, r, block_count):
     for repeat in range(r):
         block_chosen = random.randint(1, block_num-1)   # choose from k-1 blocks
         block_count[block_chosen-1] += 1
-        # Send the next symbol of BC(ECC(Bk)) that has not yet been sent according to count_k
-        send_symbol(bc(ecc(blocks[block_chosen-1][block_count[block_chosen-1]])))
+        random_blocks.append(block_chosen-1)
+        # if If all the symbols of the block were already communicated send a random symbol
+        if block_count[block_chosen - 1] < size_of_block:
+            # Send the next symbol of BC(ECC(Bk)) that has not yet been sent according to count_k
+            send_symbol(bc(ecc(blocks[block_chosen-1][block_count[block_chosen-1]])), receiver_blocks, block_chosen-1)
+        else:
+            send_symbol(4, receiver_blocks, block_chosen-1)
 
 
-# def receiver():
+def receiver(blocks, r, chosen_block_k, the_decoded_blocks):
+    for repeat in range(r):
+        bk = chosen_block_k.pop(0)
+        block_string = ''
+        for symbol in blocks[bk]:
+            block_string += ''.join(str(symbol))
+        # block_string = ecc_minus_1(bc_minus_1()))
+        the_decoded_blocks[bk] = block_string
+    for block in the_decoded_blocks:
+        print(block)
 
 
 if __name__ == '__main__':
@@ -69,16 +102,21 @@ if __name__ == '__main__':
     data_stream = []
     for idx in range(N):
         data_stream.append(0)   # before t=0 all bits are zero
-    sliding_window_blocks = []
+    sliding_window_blocks_sender = []
+    sliding_window_blocks_receiver = []
     block_counter = []
     for num in range(k):    # Maintain a counter for each block initialized to -1 when the block is added.
         block_counter.append(-1)
     # For the very first elements of the stream, we artificially create a window of size N with, say, all 0’s
     # and similarly divide it up into blocks. This is done to keep notation consistent.
-    init_sender(k, data_stream, s, sliding_window_blocks)
-    while True:
-        print('i am main')
+    init_sender(k, data_stream, s, sliding_window_blocks_sender)
+    decoded_blocks = []
+    init_receiver(k, sliding_window_blocks_receiver, decoded_blocks)
+    # chosen block k is known via the shared randomness
+    chosen_blocks = []
+    while True:     # foreach time step t do
         new_bit = random.randint(0, 1)  # create new bit in the data stream
-        print('the new bit is ' + str(new_bit))
         data_stream.append(new_bit)
-        sender(k, new_bit, s, sliding_window_blocks, R, block_counter)
+        sender(k, new_bit, s, sliding_window_blocks_sender, R, block_counter, sliding_window_blocks_receiver,
+               chosen_blocks, decoded_blocks)
+        receiver(sliding_window_blocks_receiver, R, chosen_blocks, decoded_blocks)

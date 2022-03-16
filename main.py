@@ -33,8 +33,17 @@ def create_file():
     file.close()
 
 
-def send_symbol(symbol, blocks, current_block):
+def send_symbol(symbol, blocks, current_block, err_prob, sigma_c):
+    if random.randint(0, 100)/100 <= err_prob:
+        blocks[current_block].append(str(random.randint(0, sigma_c-1)))
+        return
     blocks[current_block].append(symbol)
+
+
+def randomize_map(sigma_c, the_map):
+    sampled_list = random.sample(range(sigma_c), 2)
+    the_map[0] = sampled_list[0]
+    the_map[1] = sampled_list[1]
 
 
 def ecc(symbol):
@@ -45,15 +54,20 @@ def ecc_minus_1(string):
     return string
 
 
-def bc(symbol):
-    return symbol
+def bc(symbol, the_map):
+    if symbol == '-':
+        return symbol
+    return the_map[int(symbol)]
 
 
-def bc_minus_1(string):
-    return string
+def bc_minus_1(symbol, the_map):
+    if symbol in the_map:
+        return str(the_map.index(symbol))
+    return '+'
 
 
-def sender(block_num, data, size_of_block, blocks, r, block_count, receiver_blocks, random_blocks, the_decoded_blocks):
+def sender(block_num, data, size_of_block, blocks, r, block_count, receiver_blocks, random_blocks, the_decoded_blocks,
+           the_map, sigma_c, err_prob):
     # any arriving element is appended to the last non-empty block
     blocks[block_num-1].append(data)
     bit_index = 0
@@ -82,21 +96,20 @@ def sender(block_num, data, size_of_block, blocks, r, block_count, receiver_bloc
         # if If all the symbols of the block were already communicated send a random symbol
         if block_count[block_chosen - 1] < size_of_block:
             # Send the next symbol of BC(ECC(Bk)) that has not yet been sent according to count_k
-            send_symbol(bc(ecc(blocks[block_chosen-1][block_count[block_chosen-1]])), receiver_blocks, block_chosen-1)
+            send_symbol(bc(ecc(blocks[block_chosen-1][block_count[block_chosen-1]]), the_map), receiver_blocks,
+                        block_chosen-1, err_prob, sigma_c)
         else:
-            send_symbol(4, receiver_blocks, block_chosen-1)
+            send_symbol(random.randint(0, sigma_c-1), receiver_blocks, block_chosen-1, err_prob, sigma_c)
 
 
-def receiver(blocks, r, chosen_block_k, the_decoded_blocks, size_of_blocks):
+def receiver(blocks, r, chosen_block_k, the_decoded_blocks, size_of_blocks, the_map):
     for repeat in range(r):
         bk = chosen_block_k.pop(0)
-        block_string = ''
-        for symbol in blocks[bk]:
-            if len(block_string) == size_of_blocks:
-                break
-            block_string += ''.join(str(symbol))
-        # block_string = ecc_minus_1(bc_minus_1()))
-        the_decoded_blocks[bk] = block_string
+        decoded_size = len(the_decoded_blocks[bk])
+        if decoded_size == size_of_blocks:
+            continue
+        symbol = bc_minus_1(blocks[bk][decoded_size], the_map)
+        the_decoded_blocks[bk] += symbol
     for block in the_decoded_blocks:
         print(block)
 
@@ -112,6 +125,9 @@ if __name__ == '__main__':
         s += 1
     R = 3   # At each time step R symbols are communicated over the channel
     k = math.floor(N/s) + 1    # number of blocks
+    sigma_size = 2
+    q = 0.5*p
+    sigma_c_size = math.ceil(sigma_size / q)
     data_stream = []
     for idx in range(N):
         data_stream.append(0)   # before t=0 all bits are zero
@@ -132,12 +148,16 @@ if __name__ == '__main__':
     f = open('data_stream.txt')
     new_data = f.read()
     f.close()
+    # random map from a set of inputs sigma to a larger set sigma_c
+    random_map = [0, 0]
     print('The sliding window is of size ' + str(N) + '\nThere are ' + str(k) + ' blocks\nEach block of size ' + str(s))
     index = 0
     while True:     # foreach time step t do
         new_bit = new_data[index]  # create new bit in the data stream
         data_stream.append(new_bit)
         index += 1
+        # every time step randomize the mapping from sigma to sigma_c
+        randomize_map(sigma_c_size, random_map)
         sender(k, new_bit, s, sliding_window_blocks_sender, R, block_counter, sliding_window_blocks_receiver,
-               chosen_blocks, decoded_blocks)
-        receiver(sliding_window_blocks_receiver, R, chosen_blocks, decoded_blocks, s)
+               chosen_blocks, decoded_blocks, random_map, sigma_c_size, q)
+        receiver(sliding_window_blocks_receiver, R, chosen_blocks, decoded_blocks, s, random_map)

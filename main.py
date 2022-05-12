@@ -35,6 +35,7 @@ def create_file():
 
 def send_symbol(symbol, blocks, current_block, err_prob, sigma_c):
     if random.randint(0, 100)/100 <= err_prob:
+        # the data is corrupted by the channel
         blocks[current_block].append(str(random.randint(0, sigma_c-1)))
         return
     blocks[current_block].append(symbol)
@@ -55,8 +56,6 @@ def ecc_minus_1(string):
 
 
 def bc(symbol, the_map):
-    if symbol == '-':
-        return symbol
     return the_map[int(symbol)]
 
 
@@ -68,27 +67,19 @@ def bc_minus_1(symbol, the_map):
 
 def sender(block_num, data, size_of_block, blocks, r, block_count, receiver_blocks, random_blocks, the_decoded_blocks,
            the_map, sigma_c, err_prob):
+    # if last block is full - need to delete block and add a new one
+    if len(blocks[block_num-1]) == size_of_block:
+        blocks.pop(0)
+        blocks.append([])
+        receiver_blocks.pop(0)
+        receiver_blocks.append([])
+        the_decoded_blocks.pop(0)
+        the_decoded_blocks.append('')
+        # update block counter
+        block_count.pop(0)
+        block_count.append(-1)
     # any arriving element is appended to the last non-empty block
     blocks[block_num-1].append(data)
-    bit_index = 0
-    # If all elements in the first block expire, add a new (empty) block and remove B1
-    for bit in blocks[0]:
-        if bit == '-':
-            bit_index = bit_index+1
-            if bit_index == size_of_block-1:    # need to delete block and add a new one
-                blocks.pop(0)
-                blocks.append([])
-                receiver_blocks.pop(0)
-                receiver_blocks.append([])
-                the_decoded_blocks.pop(0)
-                the_decoded_blocks.append('')
-                # update block counter
-                block_count.pop(0)
-                block_count.append(-1)
-                break
-        else:
-            blocks[0][bit_index] = '-'
-            break
     for repeat in range(r):
         block_chosen = random.randint(1, block_num-1)   # choose from k-1 blocks
         block_count[block_chosen-1] += 1
@@ -119,14 +110,11 @@ if __name__ == '__main__':
     N = int(input("please enter the size of the sliding window"))
     p = float(input("please enter the noise level"))     # noise level p < 1
     epsilon = 0.0001    # epsilon > 0
-    s = math.floor(pow(math.log2(N), 2))    # The sender maintains blocks of elements of size s from the current window
-    # s|n without remainder
-    while not (N % s == 0):
-        s += 1
+    s = 223    # The sender maintains blocks of elements of size s from the current window
     R = 3   # At each time step R symbols are communicated over the channel
     k = math.floor(N/s) + 1    # number of blocks
     sigma_size = 2
-    q = 0.5*p
+    q = 0.4
     sigma_c_size = math.ceil(sigma_size / q)
     data_stream = []
     for idx in range(N):
@@ -154,10 +142,9 @@ if __name__ == '__main__':
     index = 0
     while True:     # foreach time step t do
         new_bit = new_data[index]  # create new bit in the data stream
-        data_stream.append(new_bit)
         index += 1
         # every time step randomize the mapping from sigma to sigma_c
         randomize_map(sigma_c_size, random_map)
         sender(k, new_bit, s, sliding_window_blocks_sender, R, block_counter, sliding_window_blocks_receiver,
-               chosen_blocks, decoded_blocks, random_map, sigma_c_size, q)
+               chosen_blocks, decoded_blocks, random_map, sigma_c_size, p)
         receiver(sliding_window_blocks_receiver, R, chosen_blocks, decoded_blocks, s, random_map)

@@ -15,6 +15,7 @@ class ErrorCorrectingCodesForSlidingWindows:
         self.q = q
         self.sigma_c_size = math.ceil(self.sigma_size_ecc / q)
         self.epsilon = epsilon
+        self.coder = rs.RSCoder(255, 223)
 
     def run(self):
         sliding_window_blocks_sender_ecc = []
@@ -30,7 +31,7 @@ class ErrorCorrectingCodesForSlidingWindows:
         # chosen block k is known via the shared randomness
         chosen_blocks = []
         index = 0
-        while index < 20:  # foreach time step t do
+        while index < self.N:  # foreach time step t do
             new_bit = random.randint(0, 1)  # create new bit in the data stream
             index += 1
             # every time step randomize the mapping from sigma to sigma_c
@@ -65,7 +66,7 @@ class ErrorCorrectingCodesForSlidingWindows:
         all_blocks = [block] * (self.k - 1)
         all_blocks.append(last_block)
         for i in range(self.k - 1):
-            self.ecc(block, ecc_block)
+            self.ecc(self.coder, block, ecc_block)
         return all_blocks
 
     def init_receiver(self, blocks, the_decoded_blocks, erasures_blocks):
@@ -87,7 +88,7 @@ class ErrorCorrectingCodesForSlidingWindows:
         return sampled_list
 
     @staticmethod
-    def ecc(block_to_decode, ecc_blocks):
+    def ecc(coder, block_to_decode, ecc_blocks):
         byte_block = []
         # every 8 bits is a symbol - separate block to chunks 223 of size 8
         for i in range(0, len(block_to_decode), 8):
@@ -96,15 +97,13 @@ class ErrorCorrectingCodesForSlidingWindows:
             chr_byte = chr(int(bits, 2))
             byte_block.append(chr_byte)
         msg = ''.join(byte_block)
-        coder = rs.RSCoder(255, 223)
         enc = coder.encode_fast(msg)
         list1 = list(enc)
         ecc_blocks.append(list1)
 
     @staticmethod
-    def ecc_minus_1(block, erasures_pos):
+    def ecc_minus_1(coder, block, erasures_pos):
         msg = ''.join(block)
-        coder = rs.RSCoder(255, 223)
         try:
             dec, dec_ecc = coder.decode_fast(msg, True, None, erasures_pos, False)
             list1 = list(dec)
@@ -127,11 +126,13 @@ class ErrorCorrectingCodesForSlidingWindows:
         symbol_number = ord(symbol)
         return the_map[symbol_number]
 
-    @staticmethod
-    def bc_minus_1(symbol, the_map):
-        if symbol in the_map:
-            return the_map.index(symbol)
-        return '+'
+    def bc_minus_1(self, the_map):
+        map_reverse = ['+'] * self.sigma_c_size
+        i = 0
+        for x in the_map:
+            map_reverse[x] = i
+            i += 1
+        return map_reverse
 
     def sender(self, data, blocks, block_count, receiver_blocks, random_blocks,
                the_decoded_blocks, the_map, ecc_blocks, erasures_blocks):
@@ -149,7 +150,7 @@ class ErrorCorrectingCodesForSlidingWindows:
             erasures_blocks.append([])
             ecc_blocks.pop(0)
             # encode the full block with ecc
-            self.ecc(blocks[self.k - 2], ecc_blocks)
+            self.ecc(self.coder, blocks[self.k - 2], ecc_blocks)
             # update block counter
             block_count.pop(0)
             block_count.append(-1)
@@ -166,12 +167,13 @@ class ErrorCorrectingCodesForSlidingWindows:
                 self.send_symbol(random.randint(0, self.sigma_c_size - 1), receiver_blocks, block_chosen - 1)
 
     def receiver(self, blocks, chosen_block_k, after_bc_decode_blocks, size_of_blocks, the_map, erasures_blocks):
+        map_from_sig_bc_to_sig_ecc = self.bc_minus_1(the_map)
         for repeat in range(self.R):
             bk = chosen_block_k.pop(0)
             decoded_size = len(after_bc_decode_blocks[bk])
             if decoded_size == size_of_blocks:
                 continue
-            symbol = self.bc_minus_1(blocks[bk][decoded_size], the_map)
+            symbol = map_from_sig_bc_to_sig_ecc[blocks[bk][decoded_size]]
             if symbol == '+':
                 after_bc_decode_blocks[bk].append("\x00")
                 erasures_blocks[bk].append(len(after_bc_decode_blocks[bk]) - 1)
@@ -186,6 +188,6 @@ class ErrorCorrectingCodesForSlidingWindows:
             while len(block_copy) < 255:
                 block_copy.append("\x00")
                 erasures_copy.append(len(block_copy)-1)
-            after_ecc_decode_blocks.append(self.ecc_minus_1(block_copy, erasures_copy))
+            after_ecc_decode_blocks.append(self.ecc_minus_1(self.coder, block_copy, erasures_copy))
             block_num += 1
         return after_ecc_decode_blocks

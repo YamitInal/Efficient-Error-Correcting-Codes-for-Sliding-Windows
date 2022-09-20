@@ -16,7 +16,7 @@ if __name__ == '__main__':
     delta = 0.001
     q = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
     N = 5000
-    p = 0.9
+    p = 0.09
     size_of_blocks = 223 * 8
     number_of_blocks = math.floor(N / size_of_blocks) + 1
     number_of_runs = 100
